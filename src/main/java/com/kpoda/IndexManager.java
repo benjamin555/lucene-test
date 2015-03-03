@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileReader;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -23,6 +24,7 @@ import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.Version;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -74,13 +76,14 @@ public class IndexManager{
             
             }else if("xls".equalsIgnoreCase(type)||"xlsx".equalsIgnoreCase(type)){
                 
-                content += xls2String(file);
+                content += xls2String(file,type);
                 
             }
             
+            
             System.out.println("name :"+file.getName());
             System.out.println("path :"+file.getPath());
-            System.out.println("content :"+content);
+//            System.out.println("content :"+content);
             System.out.println();
             
             
@@ -156,14 +159,22 @@ public class IndexManager{
     /**
      * 读取xls文件内容
      * @param file 想要读取的文件对象
+     * @param type 
      * @return 返回文件内容
      */
-    public static String xls2String(File file){
+    public static String xls2String(File file, String type){
         String result = "";
+        FileInputStream fis = null;
         try{
-            FileInputStream fis = new FileInputStream(file);   
+             fis = new FileInputStream(file);   
             StringBuilder sb = new StringBuilder();   
-            Workbook rwb = new XSSFWorkbook(fis);
+            Workbook rwb = null;
+            if ("xls".equalsIgnoreCase(type)) {
+            	   rwb = new HSSFWorkbook(fis);
+			}else {
+				   rwb = new XSSFWorkbook(fis);
+			}
+          
             int len  =  rwb.getNumberOfSheets();
             for (int i = 0; i < len; i++) {   
                 Sheet rs = rwb.getSheetAt(i);
@@ -177,10 +188,18 @@ public class IndexManager{
                   
                 }   
             }   
-            fis.close();   
+          
             result += sb.toString();
         }catch(Exception e){
             e.printStackTrace();
+        }finally{
+        	if (fis!=null) {
+        		 try {
+					fis.close();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}   
+			}
         }
         return result;
     }
