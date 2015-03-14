@@ -1,4 +1,4 @@
-package com.kpoda;
+package com.kpoda.excel;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -13,6 +13,7 @@ import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field.Store;
+import org.apache.lucene.document.LongField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
@@ -50,7 +51,7 @@ public class IndexManager{
      */
     public IndexManager getManager(){
         if(indexManager == null){
-            this.indexManager = new IndexManager();
+            indexManager = new IndexManager();
         }
         return indexManager;
     }
@@ -63,59 +64,67 @@ public class IndexManager{
         Date date1 = new Date();
         List<File> fileList = getFileList(path);
         for (File file : fileList) {
-            content = "";
+//            content = "";
             //获取文件后缀
             String type = file.getName().substring(file.getName().lastIndexOf(".")+1);
-            if("txt".equalsIgnoreCase(type)){
+            List<String> strings = null;
+            if("xls".equalsIgnoreCase(type)||"xlsx".equalsIgnoreCase(type)){
+//                content += xls2String(file,type);
+                 strings = xls2List(file, type);
                 
-                content += txt2String(file);
-            
-            }else if("doc".equalsIgnoreCase(type)){
-            
-                content += doc2String(file);
-            
-            }else if("xls".equalsIgnoreCase(type)||"xlsx".equalsIgnoreCase(type)){
-                
-                content += xls2String(file,type);
                 
             }
-            
-            
             System.out.println("name :"+file.getName());
             System.out.println("path :"+file.getPath());
-//            System.out.println("content :"+content);
-            System.out.println();
+            if (strings!=null) {
+            	for (int i = 0; i < strings.size(); i++) {
+    				String c = strings.get(i);
+
+                	try{
+                        analyzer = new StandardAnalyzer(Version.LUCENE_44);
+                        directory = FSDirectory.open(new File(INDEX_DIR));
+            
+                        File indexFile = new File(INDEX_DIR);
+                        if (!indexFile.exists()) {
+                            indexFile.mkdirs();
+                        }
+                        IndexWriterConfig config = new IndexWriterConfig(Version.LUCENE_44, analyzer);
+                        indexWriter = new IndexWriter(directory, config);
+                        
+                        long rowNum = i;
+                        String rowContent = c;
+                        
+                        addDocument(file, rowNum, rowContent);
+                        
+                        indexWriter.commit();
+                        closeWriter();
+            
+                        
+                    }catch(Exception e){
+                        e.printStackTrace();
+                    }
+    			
+    			}
+			}
             
             
-            try{
-                analyzer = new StandardAnalyzer(Version.LUCENE_44);
-                directory = FSDirectory.open(new File(INDEX_DIR));
-    
-                File indexFile = new File(INDEX_DIR);
-                if (!indexFile.exists()) {
-                    indexFile.mkdirs();
-                }
-                IndexWriterConfig config = new IndexWriterConfig(Version.LUCENE_44, analyzer);
-                indexWriter = new IndexWriter(directory, config);
-                
-                Document document = new Document();
-                document.add(new TextField("filename", file.getName(), Store.YES));
-                document.add(new TextField("content", content, Store.YES));
-                document.add(new TextField("path", file.getPath(), Store.YES));
-                indexWriter.addDocument(document);
-                indexWriter.commit();
-                closeWriter();
-    
-                
-            }catch(Exception e){
-                e.printStackTrace();
-            }
-            content = "";
+            
+            
+            
+            
         }
         Date date2 = new Date();
         System.out.println("创建索引-----耗时：" + (date2.getTime() - date1.getTime()) + "ms\n");
         return true;
     }
+	protected static void addDocument(File file, long rowNum, String rowContent) throws IOException {
+		Document document = new Document();
+		document.add(new TextField("filename", file.getName(), Store.YES));
+		document.add(new TextField("content", rowContent, Store.YES));
+		document.add(new TextField("path", file.getPath(), Store.YES));
+		document.add(new LongField("rowNum", rowNum, Store.YES));
+		indexWriter.addDocument(document);
+	}
     
     /**
      * 读取txt文件的内容
@@ -153,6 +162,52 @@ public class IndexManager{
 //        }catch(Exception e){
 //            e.printStackTrace();
 //        }
+        return result;
+    }
+    
+    
+    /**
+     */
+    public static List<String> xls2List(File file, String type){
+    	List<String> result = new ArrayList<String>();
+        FileInputStream fis = null;
+        try{
+             fis = new FileInputStream(file);   
+            
+            Workbook rwb = null;
+            if ("xls".equalsIgnoreCase(type)) {
+            	   rwb = new HSSFWorkbook(fis);
+			}else {
+				   rwb = new XSSFWorkbook(fis);
+			}
+          
+            int len  =  rwb.getNumberOfSheets();
+            for (int i = 0; i < len; i++) {   
+                Sheet rs = rwb.getSheetAt(i);
+                for (int j = 0; j <=rs.getLastRowNum(); j++) {   
+                	Row row = rs.getRow(j); 
+                	if (row!=null) {
+                		StringBuilder sb = new StringBuilder();   
+                		 for(int k=0;k<row.getLastCellNum();k++)  {
+                      	   sb.append(row.getCell(k).toString()+"|");   
+                         } 
+                		result.add(sb.toString());
+					}
+                  
+                }   
+            }   
+          
+        }catch(Exception e){
+            e.printStackTrace();
+        }finally{
+        	if (fis!=null) {
+        		 try {
+					fis.close();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}   
+			}
+        }
         return result;
     }
     
