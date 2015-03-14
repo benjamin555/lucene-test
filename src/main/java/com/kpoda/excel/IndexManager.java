@@ -31,12 +31,14 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+
 /**
  * @author xinghl
  *
  */
 public class IndexManager{
-    private static IndexManager indexManager;
+    public static final String EXCEL_SEPARETE = "##";
+	private static IndexManager indexManager;
     private static String content="";
     
     private static String INDEX_DIR = "D:\\luceneIndex";
@@ -49,9 +51,11 @@ public class IndexManager{
      * 创建索引管理器
      * @return 返回索引管理器对象
      */
-    public IndexManager getManager(){
+    public static IndexManager getManager(){
         if(indexManager == null){
-            indexManager = new IndexManager();
+        	synchronized (IndexManager.class) {
+        		indexManager = new IndexManager();
+			}
         }
         return indexManager;
     }
@@ -60,7 +64,10 @@ public class IndexManager{
      * @param path 当前文件目录
      * @return 是否成功
      */
-    public static boolean createIndex(String path){
+    public  boolean createIndex(String path){
+    	if (path==null||path.isEmpty()) {
+			path = DATA_DIR;
+		}
         Date date1 = new Date();
         List<File> fileList = getFileList(path);
         for (File file : fileList) {
@@ -189,7 +196,7 @@ public class IndexManager{
                 	if (row!=null) {
                 		StringBuilder sb = new StringBuilder();   
                 		 for(int k=0;k<row.getLastCellNum();k++)  {
-                      	   sb.append(row.getCell(k).toString()+"|");   
+                      	   sb.append(row.getCell(k).toString()+EXCEL_SEPARETE);   
                          } 
                 		result.add(sb.toString());
 					}
@@ -263,7 +270,7 @@ public class IndexManager{
      * @param text 查找的字符串
      * @return 符合条件的文件List
      */
-    public static void searchIndex(String text){
+    public  void searchIndex(String text){
         Date date1 = new Date();
         try{
             directory = FSDirectory.open(new File(INDEX_DIR));
@@ -275,7 +282,6 @@ public class IndexManager{
             Query query = parser.parse(text);
             
             ScoreDoc[] hits = isearcher.search(query, null, 1000).scoreDocs;
-        
             for (int i = 0; i < hits.length; i++) {
                 Document hitDoc = isearcher.doc(hits[i].doc);
                 System.out.println("____________________________");
@@ -284,6 +290,7 @@ public class IndexManager{
                 System.out.println(hitDoc.get("path"));
                 System.out.println("____________________________");
             }
+            
             ireader.close();
             directory.close();
         }catch(Exception e){
@@ -291,6 +298,8 @@ public class IndexManager{
         }
         Date date2 = new Date();
         System.out.println("查看索引-----耗时：" + (date2.getTime() - date1.getTime()) + "ms\n");
+        
+        
     }
     /**
      * 过滤目录下的文件
@@ -347,13 +356,44 @@ public class IndexManager{
     }
     public static void main(String[] args){
         File fileIndex = new File(INDEX_DIR);
+        IndexManager indexManager = IndexManager.getManager();
         if(deleteDir(fileIndex)){
             fileIndex.mkdir();
         }else{
             fileIndex.mkdir();
         }
         
-        createIndex(DATA_DIR);
-        searchIndex("灏众");
+        indexManager.createIndex(DATA_DIR);
+        indexManager.searchIndex("灏众");
     }
+	public Result search(String keyword) {
+		Result result = new Result();
+		Date date1 = new Date();
+        try{
+            directory = FSDirectory.open(new File(INDEX_DIR));
+            analyzer = new StandardAnalyzer(Version.LUCENE_44);
+            DirectoryReader ireader = DirectoryReader.open(directory);
+            IndexSearcher isearcher = new IndexSearcher(ireader);
+    
+            QueryParser parser = new QueryParser(Version.LUCENE_44, "content", analyzer);
+            Query query = parser.parse(keyword);
+            
+            ScoreDoc[] hits = isearcher.search(query, null, 1000).scoreDocs;
+            for (int i = 0; i < hits.length; i++) {
+                Document hitDoc = isearcher.doc(hits[i].doc);
+                result.setFileName(hitDoc.get("filename"));
+                result.setRowBySeperate(hitDoc.get("content"),EXCEL_SEPARETE);
+                System.out.println();
+            }
+            
+            ireader.close();
+            directory.close();
+        }catch(Exception e){
+            e.printStackTrace();
+        }
+        Date date2 = new Date();
+        System.out.println("查看索引-----耗时：" + (date2.getTime() - date1.getTime()) + "ms\n");
+		
+		return result;
+	}
 }
